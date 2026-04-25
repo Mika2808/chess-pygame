@@ -23,7 +23,13 @@ class Game:
         
         # loading pieces
         self.pieces = self.load_pieces()
-
+        
+        # for highlisghitng moves
+        self.legal_moves = []
+        
+        self.highlight_surface = pygame.Surface((self.SQUARE_SIZE, self.SQUARE_SIZE), pygame.SRCALPHA)
+        self.highlight_surface.fill((0, 255, 0, 100))  # RGBA (last = transparency)
+        
         # selecting squre
         self.selected_square = None
 
@@ -40,6 +46,23 @@ class Game:
                          row * self.SQUARE_SIZE,
                          self.SQUARE_SIZE,
                          self.SQUARE_SIZE)
+                    )
+                if self.selected_square == (row, col):
+                                pygame.draw.rect(
+                                    self.win,
+                                    (255, 255, 0),
+                                    (col * self.SQUARE_SIZE,
+                                    row * self.SQUARE_SIZE,
+                                    self.SQUARE_SIZE,
+                                    self.SQUARE_SIZE),
+                                    3
+                                )
+
+                            # 🟢 highlight legal moves
+                if (row, col) in self.legal_moves:
+                    self.win.blit(
+                        self.highlight_surface,
+                        (col * self.SQUARE_SIZE, row * self.SQUARE_SIZE)
                     )
 
     def run(self):
@@ -97,16 +120,33 @@ class Game:
     
     def handle_click(self, pos):
         row, col = self.get_square_from_mouse(pos)
+        clicked_square = (row, col)
 
+        piece = self.engine.board[row][col]
+
+        # CASE 1: nothing selected
         if self.selected_square is None:
-            piece = self.engine.board[row][col]
+            if piece is not None and piece[0] == self.engine.turn:
+                self.selected_square = clicked_square
+                self.legal_moves = self.engine.get_legal_moves(clicked_square)
+            return
 
-            if piece is not None:
-                self.selected_square = (row, col)
-        else: 
-            start = self.selected_square
-            end = (row,col)
-
-            self.engine.move_piece(start, end)
-
+        # CASE 2: click same square → deselect
+        if clicked_square == self.selected_square:
             self.selected_square = None
+            self.legal_moves = []
+            return
+
+        # CASE 3: click own piece → switch selection
+        if piece is not None and piece[0] == self.engine.turn:
+            self.selected_square = clicked_square
+            self.legal_moves = self.engine.get_legal_moves(clicked_square)
+            return
+
+        # CASE 4: attempt move (ONLY if legal)
+        if clicked_square in self.legal_moves:
+            self.engine.move_piece(self.selected_square, clicked_square)
+
+        # CASE 5: reset selection after attempt
+        self.selected_square = None
+        self.legal_moves = []

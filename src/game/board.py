@@ -255,10 +255,18 @@ class Board:
 
         piece = move["piece"]
 
+        # STEP 1: restore moved piece
         self.board[start_row][start_col] = piece
-        self.board[end_row][end_col] = move["captured"]
-        
-        # undo castling rook move
+
+        # STEP 2: restore destination square
+        if move["is_en_passant"]:
+            # en passant → destination square was EMPTY
+            self.board[end_row][end_col] = None
+        else:
+            # normal move → restore captured piece (or None)
+            self.board[end_row][end_col] = move["captured"]
+
+        # STEP 3: undo castling
         if move["is_castling"]:
             rsr, rsc = move["rook_start"]
             rer, rec = move["rook_end"]
@@ -267,15 +275,17 @@ class Board:
             self.board[rsr][rsc] = rook
             self.board[rer][rec] = None
 
+        # STEP 4: restore en passant capture
         if move["is_en_passant"]:
-            # restore pawn behind the moved square
             r, c = move["captured_pos"]
             self.board[r][c] = move["captured"]
 
+        # STEP 5: restore state
         self.king_moved = move["prev_king_moved"]
         self.rook_moved = move["prev_rook_moved"]
         self.en_passant_square = move["prev_en_passant"]
 
+        # STEP 6: switch turn
         self.turn = "b" if self.turn == "w" else "w"
 
     def is_valid_knight_move(self, piece, start, end):
@@ -512,17 +522,47 @@ class Board:
         if piece is None:
             return False
 
-        # build move exactly like in move_piece
+        # -----------------------
+        # STEP 1: piece validation (CRITICAL FIX)
+        # -----------------------
+        valid = False
+
+        if piece[1] == "p":
+            valid = self.is_valid_pawn_move(piece, start_pos, end_pos)
+        elif piece[1] == "n":
+            valid = self.is_valid_knight_move(piece, start_pos, end_pos)
+        elif piece[1] == "b":
+            valid = self.is_valid_bishop_move(piece, start_pos, end_pos)
+        elif piece[1] == "r":
+            valid = self.is_valid_rook_move(piece, start_pos, end_pos)
+        elif piece[1] == "q":
+            valid = self.is_valid_queen_move(piece, start_pos, end_pos)
+        elif piece[1] == "k":
+             # NORMAL KING MOVE
+            if self.is_valid_king_move(piece, start_pos, end_pos):
+                valid = True
+
+            # CASTLING MOVE (special case)
+            elif abs(start_col - end_col) == 2:
+                if self.is_castling_move(start_pos, end_pos):
+                    valid = True
+                else:
+                    return False
+
+        if not valid:
+            return False
+
+        # STEP 2: build move 
         move = {
             "piece": piece,
             "start": start_pos,
             "end": end_pos,
             "captured": self.board[end_row][end_col] if self.board[end_row][end_col] is not None else None,
-            
+
             "is_en_passant": False,
             "prev_en_passant": self.en_passant_square,
             "captured_pos": None,
-            
+
             "promotion": None,
             "is_castling": False,
             "rook_start": None,
@@ -534,35 +574,39 @@ class Board:
             }
         }
 
-        # handle en passant detection (same logic as before)
+        # STEP 3: special cases
+
+        # en passant
         if piece[1] == "p":
-            if start_col != end_pos[1] and self.board[end_pos[0]][end_pos[1]] is None:
+            if start_col != end_col and self.board[end_row][end_col] is None:
                 move["is_en_passant"] = True
-                move["captured_pos"] = (start_row, end_pos[1])
-                move["captured"] = self.board[start_row][end_pos[1]]
-        # handle casteling
+                move["captured_pos"] = (start_row, end_col)
+                move["captured"] = self.board[start_row][end_col]
+
+        # castling (IMPORTANT: validate it)
         if piece[1] == "k" and abs(start_col - end_col) == 2:
-                move["is_castling"] = True
+            if not self.is_castling_move(start_pos, end_pos):
+                return False
 
-                row = start_row
+            move["is_castling"] = True
 
-                if end_col == 6:  # king side
-                    move["rook_start"] = (row, 7)
-                    move["rook_end"] = (row, 5)
-                else:  # queen side
-                    move["rook_start"] = (row, 0)
-                    move["rook_end"] = (row, 3)
+            row = start_row
+            if end_col == 6:
+                move["rook_start"] = (row, 7)
+                move["rook_end"] = (row, 5)
+            else:
+                move["rook_start"] = (row, 0)
+                move["rook_end"] = (row, 3)
 
-        # apply temporarily
+        # STEP 4: simulate move
         self.apply_move(move)
 
-        # check king safety
         in_check = self.is_in_check(piece[0])
 
         # undo move
         self.undo_move()
 
-        # legal only if king is safe
+        # STEP 5: final decision
         return not in_check
     
     def has_any_legal_move(self, color):
@@ -609,7 +653,11 @@ class Board:
         # must move 2 squares horizontally
         if abs(end_col - start_col) != 2:
             return False
-
+        
+        # must be the same row
+        if start_row != end_row:
+            return False
+        
         # king cannot currently be in check
         if self.is_in_check(color):
             return False
@@ -667,3 +715,16 @@ class Board:
             return False
 
         return True
+    
+    def get_legal_moves(self, start_pos):
+        moves = []
+
+        for row in range(8):
+            for col in range(8):
+                end_pos = (row, col)
+
+                # reuse your existing logic
+                if self.is_legal_move(start_pos, end_pos):
+                    moves.append(end_pos)
+
+        return moves
