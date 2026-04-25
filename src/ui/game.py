@@ -1,8 +1,10 @@
 import pygame
+from src.game.agent import AgentAI
 
 class Game:
     def __init__(self, engine):
         self.engine = engine  # your chess logic
+        self.ai = AgentAI(engine, "b")
 
         pygame.init()
 
@@ -47,6 +49,7 @@ class Game:
                          self.SQUARE_SIZE,
                          self.SQUARE_SIZE)
                     )
+
                 if self.selected_square == (row, col):
                                 pygame.draw.rect(
                                     self.win,
@@ -58,7 +61,6 @@ class Game:
                                     3
                                 )
 
-                            # 🟢 highlight legal moves
                 if (row, col) in self.legal_moves:
                     self.win.blit(
                         self.highlight_surface,
@@ -67,6 +69,8 @@ class Game:
 
     def run(self):
         while self.running:
+            if self.engine.turn == "b":
+                self.ai.make_move()
 
             for event in pygame.event.get():
                 if event.type == pygame.QUIT:

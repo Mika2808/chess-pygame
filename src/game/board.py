@@ -728,3 +728,22 @@ class Board:
                     moves.append(end_pos)
 
         return moves
+    
+    def get_all_legal_moves(self, color):
+        moves = []
+
+        for row in range(8):
+            for col in range(8):
+                piece = self.board[row][col]
+
+                if piece is not None and piece[0] == color:
+                    start = (row, col)
+
+                    for r in range(8):
+                        for c in range(8):
+                            end = (r, c)
+
+                            if self.is_legal_move(start, end):
+                                moves.append((start, end))
+
+        return moves
