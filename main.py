@@ -1,17 +1,10 @@
 from src.game.board import Board
+from src.ui.game import Game
 
 def main():
     board = Board()
-    # clear path
-    board.board[7][5] = None
-    board.board[7][6] = None
-
-    board.move_piece((7, 4), (7, 6))  # castle
-
-    board.print_board()
-
-    board.undo_move()
-    board.print_board()
+    game = Game(board)
+    game.run()
 
 def test_check(board):
     board.board = [[None for _ in range(8)] for _ in range(8)]

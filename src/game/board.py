@@ -59,7 +59,6 @@ class Board:
             "prev_en_passant": self.en_passant_square,
             "captured_pos": None,
             
-            # future:
             "promotion": None,
             "is_castling": False,
             "rook_start": None,
@@ -524,8 +523,7 @@ class Board:
             "prev_en_passant": self.en_passant_square,
             "captured_pos": None,
             
-            # future:
-            # "promotion": None
+            "promotion": None,
             "is_castling": False,
             "rook_start": None,
             "rook_end": None,
