@@ -153,6 +153,8 @@ class Board:
         self.apply_move(move)
 
     def apply_move(self, move):
+        self.en_passant_square = None
+
         start_row, start_col = move["start"]
         end_row, end_col = move["end"]
 
@@ -730,7 +732,7 @@ class Board:
         return moves
     
     def get_all_legal_moves(self, color):
-        moves = []
+        moves_all = []
 
         for row in range(8):
             for col in range(8):
@@ -744,6 +746,29 @@ class Board:
                             end = (r, c)
 
                             if self.is_legal_move(start, end):
-                                moves.append((start, end))
+                                moves_all.append((start, end))
 
-        return moves
+        return moves_all
+    
+    def evaluate(self):
+        piece_values = {
+            "p": 1,
+            "n": 3,
+            "b": 3,
+            "r": 5,
+            "q": 9,
+            "k": 0
+        }
+
+        score = 0
+
+        for row in self.board:
+            for piece in row:
+                if piece:
+                    value = piece_values[piece[1]]
+                    if piece[0] == "w":
+                        score += value
+                    else:
+                        score -= value
+
+        return score

@@ -4,7 +4,7 @@ from src.game.agent import AgentAI
 class Game:
     def __init__(self, engine):
         self.engine = engine  # your chess logic
-        self.ai = AgentAI(engine, "b")
+        self.ai = AgentAI(engine, "b", 3)
 
         pygame.init()
 
@@ -22,7 +22,7 @@ class Game:
         self.win = pygame.display.set_mode((self.WIDTH, self.HEIGHT))
         pygame.display.set_caption("Chess")
         self.running = True
-        
+        self.ai_moved = False
         # loading pieces
         self.pieces = self.load_pieces()
         
@@ -69,8 +69,14 @@ class Game:
 
     def run(self):
         while self.running:
-            if self.engine.turn == "b":
+            # AI turn
+            if self.engine.turn == "b" and not self.ai_moved:
                 self.ai.make_move()
+                self.ai_moved = True
+
+            # Player turn → reset flag
+            if self.engine.turn == "w":
+                self.ai_moved = False
 
             for event in pygame.event.get():
                 if event.type == pygame.QUIT:
