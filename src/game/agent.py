@@ -18,8 +18,13 @@ class AgentAI:
 
         moves = self.board.get_all_legal_moves(self.color)
 
+        # sorting by captures
+        moves.sort(key=lambda m:
+            self.board.board[m[1][0]][m[1][1]] is not None,
+            reverse=True
+        )
+
         for move in moves:
-            print("Move")
             self.board.move_piece(move[0], move[1])
 
             score = self.minimax(self.depth - 1, -math.inf, math.inf, True) ## OB
@@ -42,6 +47,16 @@ class AgentAI:
         color = "w" if is_maximizing else "b"
         moves = self.board.get_all_legal_moves(color)
 
+        if not moves:
+            if self.board.is_in_check(color):
+                # checkmate
+                if is_maximizing:
+                    return -99999  # white is checkmated → bad for white
+                else:
+                    return 99999   # black is checkmated → good for white
+            else:
+                return 0  # stalemate
+            
         if is_maximizing:
             max_eval = -math.inf
             for move in moves:

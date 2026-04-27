@@ -1,3 +1,13 @@
+from src.game.evaluation import (
+    PIECE_VALUES,
+    PAWN_TABLE,
+    KNIGHT_TABLE,
+    BISHOP_TABLE,
+    ROOK_TABLE,
+    QUEEN_TABLE,
+    KING_TABLE_MID
+)
+
 class Board:
     def __init__(self):
         self.board = self.create_board()
@@ -751,24 +761,189 @@ class Board:
         return moves_all
     
     def evaluate(self):
-        piece_values = {
-            "p": 1,
-            "n": 3,
-            "b": 3,
-            "r": 5,
-            "q": 9,
-            "k": 0
-        }
+        return (
+            self.evaluate_material() +
+            self.evaluate_pawns() +
+            self.evaluate_knights() + 
+            self.evaluate_bishops() + 
+            self.bishop_pair_bonus() +
+            self.evaluate_rooks() +
+            self.evaluate_rook_files() +
+            self.evaluate_rook_seventh_rank() + 
+            self.evaluate_queens() +
+            self.evaluate_king()
+        )
+    
+    def evaluate_material(self):
+        score = 0
+
+        for piece, row, col in self.get_all_pieces():
+            value = PIECE_VALUES[piece[1]]
+
+            if piece[0] == "w":
+                score += value
+            else:
+                score -= value
+
+        return score
+    
+    def evaluate_pawns(self):
+        score = 0
+
+        for piece, row, col in self.get_all_pieces():
+            if piece[1] != "p":
+                continue
+
+            if piece[0] == "w":
+                score += PAWN_TABLE[row][col]
+            else:
+                score -= PAWN_TABLE[7 - row][col]
+
+        return score
+    
+    def evaluate_knights(self):
+        score = 0
+
+        for piece, row, col in self.get_all_pieces():
+            if piece[1] != "n":
+                continue
+
+            if piece[0] == "w":
+                score += KNIGHT_TABLE[row][col]
+            else:
+                score -= KNIGHT_TABLE[7 - row][col]
+
+        return score
+    
+    def evaluate_bishops(self):
+        score = 0
+
+        for piece, row, col in self.get_all_pieces():
+            if piece[1] != "b":
+                continue
+
+            if piece[0] == "w":
+                score += BISHOP_TABLE[row][col]
+            else:
+                score -= BISHOP_TABLE[7 - row][col]
+
+        return score
+    
+    def bishop_pair_bonus(self):
+        white_bishops = 0
+        black_bishops = 0
+
+        for piece, _, _ in self.get_all_pieces():
+            if piece == "wb":
+                white_bishops += 1
+            elif piece == "bb":
+                black_bishops += 1
 
         score = 0
 
-        for row in self.board:
-            for piece in row:
-                if piece:
-                    value = piece_values[piece[1]]
-                    if piece[0] == "w":
-                        score += value
-                    else:
-                        score -= value
+        if white_bishops >= 2:
+            score += 30
+        if black_bishops >= 2:
+            score -= 30
 
         return score
+    
+    def evaluate_rooks(self):
+        score = 0
+
+        for piece, row, col in self.get_all_pieces():
+            if piece[1] != "r":
+                continue
+
+            if piece[0] == "w":
+                score += ROOK_TABLE[row][col]
+            else:
+                score -= ROOK_TABLE[7 - row][col]
+
+        return score
+    
+    def evaluate_rook_files(self):
+        score = 0
+
+        for piece, row, col in self.get_all_pieces():
+            if piece[1] != "r":
+                continue
+
+            file_col = col
+
+            own_pawn = False
+            enemy_pawn = False
+
+            for r in range(8):
+                sq = self.board[r][file_col]
+                if sq:
+                    if sq[1] == "p":
+                        if sq[0] == piece[0]:
+                            own_pawn = True
+                        else:
+                            enemy_pawn = True
+
+            # open file
+            if not own_pawn and not enemy_pawn:
+                if piece[0] == "w":
+                    score += 25
+                else:
+                    score -= 25
+
+            # semi-open file
+            elif not own_pawn and enemy_pawn:
+                if piece[0] == "w":
+                    score += 10
+                else:
+                    score -= 10
+
+        return score
+    
+    def evaluate_rook_seventh_rank(self):
+        score = 0
+
+        for piece, row, col in self.get_all_pieces():
+            if piece[1] != "r":
+                continue
+
+            if piece[0] == "w" and row == 1:
+                score += 20
+            elif piece[0] == "b" and row == 6:
+                score -= 20
+
+        return score
+    
+    def evaluate_queens(self):
+        score = 0
+
+        for piece, row, col in self.get_all_pieces():
+            if piece[1] != "q":
+                continue
+
+            if piece[0] == "w":
+                score += QUEEN_TABLE[row][col]
+            else:
+                score -= QUEEN_TABLE[7 - row][col]
+
+        return score
+    
+    def evaluate_king(self):
+        score = 0
+
+        for piece, row, col in self.get_all_pieces():
+            if piece[1] != "k":
+                continue
+
+            if piece[0] == "w":
+                score += KING_TABLE_MID[row][col]
+            else:
+                score -= KING_TABLE_MID[7 - row][col]
+
+        return score
+    
+    def get_all_pieces(self):
+        for row in range(8):
+            for col in range(8):
+                piece = self.board[row][col]
+                if piece:
+                    yield piece, row, col
