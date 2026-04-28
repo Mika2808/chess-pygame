@@ -4,7 +4,7 @@ from src.game.agent import AgentAI
 class Game:
     def __init__(self, engine):
         self.engine = engine  # your chess logic
-        self.ai = AgentAI(engine, "b", 3)
+        self.ai = AgentAI(engine, "b", 4)
 
         pygame.init()
 
