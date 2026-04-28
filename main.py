@@ -1,10 +1,72 @@
 from src.game.board import Board
 from src.ui.game import Game
+import copy
 
 def main():
+    # board = Board()
+    # game = Game(board)
+    # print(board.get_knight_moves_bb("w"))
+    #game.run()
+    #test_undo()
+    test_pawns()
+
+def test_pawns():
     board = Board()
-    game = Game(board)
-    game.run()
+
+    print("White pawn moves:")
+    print(bin(board.bitboards["wp"]))
+    print(board.occupancy["all"])
+    moves = board.get_pawn_moves_bb("w")
+
+    for m in moves:
+        print(m)
+
+def test_undo():
+    board = Board()
+
+    # init bitboards if not already in __init__
+    board.init_bitboards()
+
+    print("Initial board:")
+    for row in board.board:
+        print(row)
+
+    # save state
+    board_before = copy.deepcopy(board.board)
+    bitboards_before = board.bitboards.copy()
+
+    # make a move (example: white pawn e2 → e4)
+    start = (6, 4)
+    end = (4, 4)
+
+    print("\nMaking move:", start, "->", end)
+    board.move_piece(start, end)
+
+    print("\nBoard after move:")
+    for row in board.board:
+        print(row)
+
+    # undo
+    print("\nUndoing move...")
+    board.undo_move()
+
+    print("\nBoard after undo:")
+    for row in board.board:
+        print(row)
+
+    # -----------------------
+    # CHECK RESULTS
+    # -----------------------
+    print("\nBoard restored:", board.board == board_before)
+
+    bitboards_equal = True
+    for k in bitboards_before:
+        if board.bitboards[k] != bitboards_before[k]:
+            print(f"Mismatch in bitboard {k}")
+            bitboards_equal = False
+
+    print("Bitboards restored:", bitboards_equal)
+
 
 def test_check(board):
     board.board = [[None for _ in range(8)] for _ in range(8)]

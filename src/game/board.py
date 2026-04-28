@@ -21,8 +21,282 @@ class Board:
             "w" : {"king_side": False, "queen_side": False},
             "b" : {"king_side": False, "queen_side": False},
             }
+        
+        
+        # bitboards
+        self.bitboards = {
+            "wp": 0,
+            "wn": 0,
+            "wb": 0,
+            "wr": 0,
+            "wq": 0,
+            "wk": 0,
+            "bp": 0,
+            "bn": 0,
+            "bb": 0,
+            "br": 0,
+            "bq": 0,
+            "bk": 0,
+        }
 
+        self.occupancy = {
+            "w": 0,
+            "b": 0,
+            "all": 0
+        }
 
+        self.init_bitboards()
+        self.update_occupancy()
+
+        self.KNIGHT_MOVES = self.init_knight_moves()
+        self.KING_MOVES = self.init_king_moves()
+    
+    def init_king_moves(self):
+        moves = [0] * 64
+
+        king_offsets = [
+            (-1, -1), (-1, 0), (-1, 1),
+            (0, -1),          (0, 1),
+            (1, -1),  (1, 0), (1, 1),
+        ]
+
+        for row in range(8):
+            for col in range(8):
+                sq = row * 8 + col
+                attacks = 0
+
+                for dr, dc in king_offsets:
+                    r = row + dr
+                    c = col + dc
+
+                    if 0 <= r < 8 and 0 <= c < 8:
+                        target_sq = r * 8 + c
+                        attacks |= (1 << target_sq)
+
+                moves[sq] = attacks
+
+        return moves
+    
+    def init_knight_moves(self):
+        moves = [0] * 64
+
+        knight_offsets = [
+            (-2, -1), (-2, 1),
+            (-1, -2), (-1, 2),
+            (1, -2), (1, 2),
+            (2, -1), (2, 1),
+        ]
+
+        for row in range(8):
+            for col in range(8):
+                sq = row * 8 + col
+                attacks = 0
+
+                for dr, dc in knight_offsets:
+                    r = row + dr
+                    c = col + dc
+
+                    if 0 <= r < 8 and 0 <= c < 8:
+                        target_sq = r * 8 + c
+                        attacks |= (1 << target_sq)
+
+                moves[sq] = attacks
+
+        return moves
+    
+    def get_knight_moves_bb(self, color):
+        moves = []
+
+        knights = self.bitboards[color + "n"]
+        own_occ = self.occupancy[color]
+
+        while knights:
+            sq = (knights & -knights).bit_length() - 1  # get LS1B index
+            knights &= knights - 1  # remove LS1B
+
+            attacks = self.KNIGHT_MOVES[sq]
+
+            # remove own pieces
+            attacks &= ~own_occ
+
+            # iterate over attack squares
+            while attacks:
+                target_sq = (attacks & -attacks).bit_length() - 1
+                attacks &= attacks - 1
+
+                start = (sq // 8, sq % 8)
+                end = (target_sq // 8, target_sq % 8)
+
+                moves.append((start, end))
+
+        return moves
+    
+    def get_king_moves_bb(self, color):
+        moves = []
+
+        king = self.bitboards[color + "k"]
+        own_occ = self.occupancy[color]
+
+        if king == 0:
+            return []
+
+        sq = (king & -king).bit_length() - 1
+
+        attacks = self.KING_MOVES[sq]
+
+        # remove own pieces
+        attacks &= ~own_occ
+
+        while attacks:
+            target_sq = (attacks & -attacks).bit_length() - 1
+            attacks &= attacks - 1
+
+            start = (sq // 8, sq % 8)
+            end = (target_sq // 8, target_sq % 8)
+
+            moves.append((start, end))
+
+        return moves
+    
+    def get_pawn_moves_bb(self, color):
+        moves = []
+
+        pawns = self.bitboards[color + "p"]
+        own = self.occupancy[color]
+        enemy = self.occupancy["b" if color == "w" else "w"]
+        empty = ~self.occupancy["all"] & ((1 << 64) - 1)
+
+        if color == "w":
+            # -------------------
+            # SINGLE PUSH
+            # -------------------
+            single = (pawns << 8) & empty
+
+            # -------------------
+            # DOUBLE PUSH
+            # -------------------
+            rank_2 = 0x000000000000FF00
+            double = ((pawns & rank_2) << 16) & empty & (empty << 8)
+
+            # -------------------
+            # CAPTURES
+            # -------------------
+            cap_left = (pawns << 7) & enemy
+            cap_right = (pawns << 9) & enemy
+
+        else:
+            # -------------------
+            # SINGLE PUSH
+            # -------------------
+            single = (pawns >> 8) & empty
+
+            # -------------------
+            # DOUBLE PUSH
+            # -------------------
+            rank_7 = 0x00FF000000000000
+            double = ((pawns & rank_7) >> 16) & empty & (empty >> 8)
+
+            # -------------------
+            # CAPTURES
+            # -------------------
+            cap_left = (pawns >> 9) & enemy
+            cap_right = (pawns >> 7) & enemy
+
+        return self._extract_pawn_moves(pawns, single, double, cap_left, cap_right, color)
+    
+    def _extract_pawn_moves(self, pawns, single, double, capL, capR, color):
+        moves = []
+
+        def pop(lsb):
+            return (lsb & -lsb).bit_length() - 1
+
+        # SINGLE PUSH
+        temp = single
+        while temp:
+            to_sq = pop(temp)
+            temp &= temp - 1
+
+            from_sq = to_sq - 8 if color == "w" else to_sq + 8
+
+            moves.append(((from_sq // 8, from_sq % 8),
+                        (to_sq // 8, to_sq % 8)))
+
+        # DOUBLE PUSH
+        temp = double
+        while temp:
+            to_sq = pop(temp)
+            temp &= temp - 1
+
+            from_sq = to_sq - 16 if color == "w" else to_sq + 16
+
+            moves.append(((from_sq // 8, from_sq % 8),
+                        (to_sq // 8, to_sq % 8)))
+
+        # CAPTURES
+        for bb in [capL, capR]:
+            temp = bb
+            while temp:
+                to_sq = pop(temp)
+                temp &= temp - 1
+
+                if color == "w":
+                    from_sq1 = to_sq - 7
+                    from_sq2 = to_sq - 9
+                else:
+                    from_sq1 = to_sq + 7
+                    from_sq2 = to_sq + 9
+
+                # pick correct pawn later (simplified version)
+                from_sq = from_sq1 if self.bitboards[color + "p"] & (1 << from_sq1) else from_sq2
+
+                moves.append(((from_sq // 8, from_sq % 8),
+                            (to_sq // 8, to_sq % 8)))
+
+        return moves
+    
+    def update_occupancy(self):
+        self.occupancy["w"] = (
+            self.bitboards["wp"] |
+            self.bitboards["wn"] |
+            self.bitboards["wb"] |
+            self.bitboards["wr"] |
+            self.bitboards["wq"] |
+            self.bitboards["wk"]
+        )
+
+        self.occupancy["b"] = (
+            self.bitboards["bp"] |
+            self.bitboards["bn"] |
+            self.bitboards["bb"] |
+            self.bitboards["br"] |
+            self.bitboards["bq"] |
+            self.bitboards["bk"]
+        )
+
+        self.occupancy["all"] = self.occupancy["w"] | self.occupancy["b"]
+
+    def set_bit(self, bb, square):
+        return bb | (1 << square)
+
+    def clear_bit(self, bb, square):
+        return bb & ~(1 << square)
+
+    def get_bit(self, bb, square):
+        return (bb >> square) & 1
+    
+    def init_bitboards(self):
+        self.bitboards = {
+            "wp": 0, "wn": 0, "wb": 0, "wr": 0, "wq": 0, "wk": 0,
+            "bp": 0, "bn": 0, "bb": 0, "br": 0, "bq": 0, "bk": 0
+        }
+
+        for row in range(8):
+            for col in range(8):
+                piece = self.board[row][col]
+                if piece:
+                    sq = row * 8 + col
+                    self.bitboards[piece] |= (1 << sq)
+    
     def create_board(self):
         # Empty 8x8 board
         board = [[None for _ in range(8)] for _ in range(8)]
@@ -159,7 +433,7 @@ class Board:
         if not self.is_legal_move(start_pos, end_pos):
             print("Illegal move: king would be in check")
             return
-        
+
         self.apply_move(move)
 
     def apply_move(self, move):
@@ -216,6 +490,21 @@ class Board:
             self.board[rer][rec] = rook
             self.board[rsr][rsc] = None
 
+        start_sq = start_row * 8 + start_col
+        end_sq = end_row * 8 + end_col
+        captured = move["captured"]
+
+        # remove piece from start
+        self.bitboards[piece] = self.clear_bit(self.bitboards[piece], start_sq)
+
+        # place on end
+        self.bitboards[piece] = self.set_bit(self.bitboards[piece], end_sq)
+        self.update_occupancy()
+        if captured:
+            self.bitboards[captured] = self.clear_bit(
+                self.bitboards[captured], end_sq
+            )
+
         self.move_history.append(move)
 
     def is_valid_pawn_move(self, piece, start, end):
@@ -267,9 +556,18 @@ class Board:
 
         piece = move["piece"]
 
+        captured = move["captured"]
+
+        start_sq = start_row * 8 + start_col
+        end_sq = end_row * 8 + end_col
+
         # STEP 1: restore moved piece
         self.board[start_row][start_col] = piece
-
+        
+        # bitboards: move piece back
+        self.bitboards[piece] = self.clear_bit(self.bitboards[piece], end_sq)
+        self.bitboards[piece] = self.set_bit(self.bitboards[piece], start_sq)
+                                             
         # STEP 2: restore destination square
         if move["is_en_passant"]:
             # en passant → destination square was EMPTY
@@ -277,6 +575,12 @@ class Board:
         else:
             # normal move → restore captured piece (or None)
             self.board[end_row][end_col] = move["captured"]
+            
+            if captured:
+                # restore captured piece on end square
+                self.bitboards[captured] = self.set_bit(
+                    self.bitboards[captured], end_sq
+                )
 
         # STEP 3: undo castling
         if move["is_castling"]:
@@ -284,19 +588,38 @@ class Board:
             rer, rec = move["rook_end"]
 
             rook = self.board[rer][rec]
+
+            # board
             self.board[rsr][rsc] = rook
             self.board[rer][rec] = None
+            
+            # bitboards
+            rook_start_sq = rsr * 8 + rsc
+            rook_end_sq = rer * 8 + rec
+
+            self.bitboards[rook] = self.clear_bit(
+                self.bitboards[rook], rook_end_sq
+            )
+            self.bitboards[rook] = self.set_bit(
+                self.bitboards[rook], rook_start_sq
+            )
 
         # STEP 4: restore en passant capture
         if move["is_en_passant"]:
             r, c = move["captured_pos"]
             self.board[r][c] = move["captured"]
+            
+            # bitboards
+            cap_sq = r * 8 + c
+            self.bitboards[captured] = self.set_bit(
+                self.bitboards[captured], cap_sq
+            )
 
         # STEP 5: restore state
         self.king_moved = move["prev_king_moved"]
         self.rook_moved = move["prev_rook_moved"]
         self.en_passant_square = move["prev_en_passant"]
-
+        self.update_occupancy()
         # STEP 6: switch turn
         self.turn = "b" if self.turn == "w" else "w"
 
